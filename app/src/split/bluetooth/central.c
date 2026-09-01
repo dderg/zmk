@@ -777,6 +777,20 @@ static void split_central_process_connection(struct bt_conn *conn) {
     LOG_DBG("New connection params: Interval: %d, Latency: %d, PHY: %d", info.le.interval,
             info.le.latency, info.le.phy->rx_phy);
 
+    if (IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_PREFER_CODED_PHY)) {
+        const struct bt_conn_le_phy_param phy_params = {
+            .options = BT_CONN_LE_PHY_OPT_CODED_S8,
+            .pref_tx_phy = BT_GAP_LE_PHY_CODED,
+            .pref_rx_phy = BT_GAP_LE_PHY_CODED,
+        };
+        err = bt_conn_le_phy_update(conn, &phy_params);
+        if (err) {
+            LOG_WRN("Failed to request S=8 coded PHY for split connection (err %d)", err);
+        } else {
+            LOG_DBG("Requested S=8 coded PHY for split connection");
+        }
+    }
+
     // Restart scanning if necessary.
     start_scanning();
 }
@@ -1021,10 +1035,21 @@ static void split_central_security_changed(struct bt_conn *conn, bt_security_t l
     }
 }
 
+static void split_central_le_phy_updated(struct bt_conn *conn,
+                                         struct bt_conn_le_phy_info *info) {
+    if (!peripheral_slot_for_conn(conn)) {
+        return;
+    }
+
+    LOG_DBG("Split connection PHY updated: TX %u, RX %u", info->tx_phy, info->rx_phy);
+}
+
+
 static struct bt_conn_cb conn_callbacks = {
     .connected = split_central_connected,
     .disconnected = split_central_disconnected,
     .security_changed = split_central_security_changed,
+    .le_phy_updated = split_central_le_phy_updated,
 };
 
 K_THREAD_STACK_DEFINE(split_central_split_run_q_stack,

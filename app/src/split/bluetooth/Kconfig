@@ -10,6 +10,15 @@ config ZMK_SPLIT_BLE_PRIORITY
     help
         Lower number priorities transports are favored over higher numbers.
 
+config ZMK_SPLIT_BLE_PREFER_CODED_PHY
+    bool "Prefer LE Coded PHY for split connections"
+    depends on BT_CTLR_PHY_CODED && !BT_CTLR_PHY_2M
+    help
+      Request the S=8 LE Coded PHY for split connections. This improves
+      receiver sensitivity at the cost of throughput. Disable BT_CTLR_PHY_2M
+      so its automatic update cannot replace the coded PHY request.
+
+
 # Added for backwards compatibility. New shields / board should set `ZMK_SPLIT_ROLE_CENTRAL` only.
 config ZMK_SPLIT_BLE_ROLE_CENTRAL
     bool
