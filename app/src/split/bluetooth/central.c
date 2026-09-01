@@ -990,21 +990,35 @@ static void split_central_disconnected(struct bt_conn *conn, uint8_t reason) {
 static void split_central_security_changed(struct bt_conn *conn, bt_security_t level,
                                            enum bt_security_err err) {
     struct peripheral_slot *slot = peripheral_slot_for_conn(conn);
-    if (!slot || !slot->selected_physical_layout_handle) {
+    if (!slot) {
         return;
     }
 
     if (err > 0) {
-        LOG_DBG("Skipping updating the physical layout for peripheral with security error");
+        LOG_DBG("Skipping secured peripheral update because of a security error");
         return;
     }
 
     if (level < BT_SECURITY_L2) {
-        LOG_DBG("Skipping updating the physical layout for peripheral with insufficient security");
+        LOG_DBG("Skipping secured peripheral update because security is insufficient");
         return;
     }
 
-    k_work_submit(&update_peripherals_selected_layouts_work);
+    if (IS_ENABLED(CONFIG_BT_PRIVACY)) {
+        struct bt_conn_info info;
+        int info_err = bt_conn_get_info(conn, &info);
+        if (info_err == 0 && bt_addr_le_is_identity(info.le.dst)) {
+            int slot_idx = peripheral_slot_index_for_conn(conn);
+            int save_err = zmk_ble_set_peripheral_addr(slot_idx, info.le.dst);
+            if (save_err < 0) {
+                LOG_WRN("Failed to persist peripheral identity address (%d)", save_err);
+            }
+        }
+    }
+
+    if (slot->selected_physical_layout_handle) {
+        k_work_submit(&update_peripherals_selected_layouts_work);
+    }
 }
 
 static struct bt_conn_cb conn_callbacks = {

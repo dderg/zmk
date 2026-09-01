@@ -377,12 +377,48 @@ int zmk_ble_set_device_name(char *name) {
 }
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+static bt_addr_le_t normalized_peripheral_addr(const bt_addr_le_t *addr) {
+    bt_addr_le_t normalized;
+    bt_addr_le_copy(&normalized, addr);
+
+    if (normalized.type == BT_ADDR_LE_PUBLIC_ID) {
+        normalized.type = BT_ADDR_LE_PUBLIC;
+    } else if (normalized.type == BT_ADDR_LE_RANDOM_ID) {
+        normalized.type = BT_ADDR_LE_RANDOM;
+    }
+
+    return normalized;
+}
+
+int zmk_ble_set_peripheral_addr(uint8_t index, const bt_addr_le_t *addr) {
+    if (index >= ZMK_SPLIT_BLE_PERIPHERAL_COUNT) {
+        return -ERANGE;
+    }
+
+    bt_addr_le_t normalized = normalized_peripheral_addr(addr);
+    if (bt_addr_le_cmp(&peripheral_addrs[index], &normalized) == 0) {
+        return 0;
+    }
+
+    bt_addr_le_copy(&peripheral_addrs[index], &normalized);
+
+#if IS_ENABLED(CONFIG_SETTINGS)
+    char setting_name[32];
+    sprintf(setting_name, "ble/peripheral_addresses/%d", index);
+    return settings_save_one(setting_name, &normalized, sizeof(normalized));
+#else
+    return 0;
+#endif
+}
+
 
 int zmk_ble_put_peripheral_addr(const bt_addr_le_t *addr) {
+    bt_addr_le_t normalized = normalized_peripheral_addr(addr);
+
     for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
         // If the address is recognized and already stored in settings, return
         // index and no additional action is necessary.
-        if (bt_addr_le_cmp(&peripheral_addrs[i], addr) == 0) {
+        if (bt_addr_le_cmp(&peripheral_addrs[i], &normalized) == 0) {
             LOG_DBG("Found existing peripheral address in slot %d", i);
             return i;
         } else {
@@ -396,16 +432,11 @@ int zmk_ble_put_peripheral_addr(const bt_addr_le_t *addr) {
         // is the zero value.
         if (bt_addr_le_cmp(&peripheral_addrs[i], BT_ADDR_LE_ANY) == 0) {
             char addr_str[BT_ADDR_LE_STR_LEN];
-            bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+            bt_addr_le_to_str(&normalized, addr_str, sizeof(addr_str));
             LOG_DBG("Storing peripheral %s in slot %d", addr_str, i);
-            bt_addr_le_copy(&peripheral_addrs[i], addr);
 
-#if IS_ENABLED(CONFIG_SETTINGS)
-            char setting_name[32];
-            sprintf(setting_name, "ble/peripheral_addresses/%d", i);
-            settings_save_one(setting_name, addr, sizeof(bt_addr_le_t));
-#endif // IS_ENABLED(CONFIG_SETTINGS)
-            return i;
+            int err = zmk_ble_set_peripheral_addr(i, &normalized);
+            return err < 0 ? err : i;
         }
     }
 
