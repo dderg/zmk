@@ -511,6 +511,12 @@ static int ble_profiles_handle_set(const char *name, size_t len, settings_read_c
                 LOG_ERR("Failed to handle peripheral address from settings (err %d)", err);
                 return err;
             }
+
+            if (IS_ENABLED(CONFIG_BT_PRIVACY) &&
+                bt_addr_le_is_rpa(&peripheral_addrs[i])) {
+                LOG_WRN("Discarding stale peripheral RPA from slot %d", i);
+                bt_addr_le_copy(&peripheral_addrs[i], BT_ADDR_LE_ANY);
+            }
         }
     }
 #endif
