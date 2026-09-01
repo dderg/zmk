@@ -63,13 +63,17 @@ static int start_advertising(bool low_duty) {
 
     if (bt_addr_le_cmp(&central_addr, BT_ADDR_LE_NONE) != 0) {
         is_bonded = true;
-        struct bt_le_adv_param adv_param = low_duty ? *BT_LE_ADV_CONN_DIR_LOW_DUTY(&central_addr)
-                                                    : *BT_LE_ADV_CONN_DIR(&central_addr);
-        return bt_le_adv_start(&adv_param, NULL, 0, NULL, 0);
+        if (!IS_ENABLED(CONFIG_BT_PRIVACY)) {
+            struct bt_le_adv_param adv_param =
+                low_duty ? *BT_LE_ADV_CONN_DIR_LOW_DUTY(&central_addr)
+                         : *BT_LE_ADV_CONN_DIR(&central_addr);
+            return bt_le_adv_start(&adv_param, NULL, 0, NULL, 0);
+        }
     } else {
         is_bonded = false;
-        return bt_le_adv_start(BT_LE_ADV_CONN, zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad), NULL, 0);
     }
+
+    return bt_le_adv_start(BT_LE_ADV_CONN, zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad), NULL, 0);
 };
 
 static bool low_duty_advertising = false;
